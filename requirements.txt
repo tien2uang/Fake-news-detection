@@ -1,0 +1,7 @@
+python-dotenv
+mlflow
+flask
+autogluon
+pandas
+kagglehub
+confluent_kafka

@@ -1,22 +1,40 @@
+from autogluon.common import TabularDataset
 from flask import Flask, request, jsonify
-from kafka import KafkaProducer, KafkaConsumer
+from confluent_kafka import Producer, Consumer, KafkaError
 import mlflow.pyfunc
+import os
+from dotenv import load_dotenv
 import threading
 import time
 import queue
 import uuid
 import json
+from training import convert_to_object_data, create_dataframe_from_object_data
+
+load_dotenv()
 
 # Initial setup for Flask app and Kafka
 app = Flask(__name__)
-producer = KafkaProducer(bootstrap_servers=['localhost:9092'], value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-consumer = KafkaConsumer('model_inference', bootstrap_servers=['localhost:9092'], group_id='model_group',
-                         value_deserializer=lambda m: json.loads(m.decode('utf-8')))
+
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
+INFERENCE_TOPIC = os.getenv("INFERENCE_TOPIC")
+producer = Producer({'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS})
+# Create a Kafka consumer
+consumer = Consumer({
+    'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS,
+    'group.id': 'training_group',
+    'auto.offset.reset': 'earliest'
+})
 
 # Luu ket qua cua request suy luan mo hinh
 # 1 request sẽ có 2 trạng thái: Not Ready, hoặc Completed
 results_store = {}
 
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    # You can add any health check logic here (e.g., database connectivity check)
+    return jsonify(status='healthy'), 200
 @app.route('/api/inference', methods=['POST'])
 def inference():
     # Create a unique ID for the inference request
@@ -25,11 +43,12 @@ def inference():
     # Prepare the message
     message = {
         'id': request_id,
-        'data': request.json  # Assumes input data is provided as JSON
+        'inference_input': request.json  # Assumes input data is provided as JSON
     }
 
     # Send the message to Kafka
-    producer.send('model_inference', message)
+    producer.produce(INFERENCE_TOPIC, value=json.dumps(message).encode('utf-8'))
+    producer.flush()
 
     # Store initial state as "Not ready"
     results_store[request_id] = {
@@ -55,97 +74,72 @@ def get_result(request_id):
 
 def load_latest_model():
     # Load the latest model from the experiment
-    experiment_name = "Fake News Detection"
-    mlflow.set_tracking_uri("http://localhost:5000")  # MLFlow server URL
-    experiment = mlflow.get_experiment_by_name(experiment_name)
+    from mlflow.pyfunc import load_model
 
-    if not experiment:
-        raise ValueError(f"Experiment {experiment_name} not found.")
-
-    # Get the latest run for the experiment
-    client = mlflow.tracking.MlflowClient()
-    runs = client.search_runs(
-        experiment_ids=[experiment.experiment_id],
-        order_by=["start_time DESC"],
-        max_results=1,
-    )
-
-    if not runs:
-        raise ValueError("No runs found for the experiment.")
-
-    # Get the run ID of the latest run
-    latest_run_id = runs[0].info.run_id
-
-    # Load the model from MLFlow
-    model_uri = f"runs:/{latest_run_id}/model"
-    model = mlflow.pyfunc.load_model(model_uri)
-    print(f"Loaded model from {model_uri}")
-    return model
+    model_name = "FakeNewsDetection"
+    model_uri = f"models:/{model_name}/latest"  # Use the latest registered version
+    predictor = load_model(model_uri)
+    return predictor
 
 
 
 
 def process_inference_requests():
+    print("Starting inference requests!!!!!!!!!!!!")
+    consumer.subscribe([INFERENCE_TOPIC])
     while True:
-        raw_messages = consumer.poll(timeout_ms=1000)  # Poll messages with a timeout
-        if not raw_messages:  # No messages received
-            print("No messages in topic, waiting...")
+        msg = consumer.poll(1.0)  # Poll every 1 second
+        if msg is None:
+            continue
+        if msg.error():
+            if msg.error().code() == KafkaError._PARTITION_EOF:
+                continue
+            else:
+                print(f"Consumer error: {msg.error()}")
+                break
+        try:
+
+            data = json.loads(msg.value().decode('utf-8'))
+            print(f"Received data: {data}")
+            request_id = data['id']
+            # Trích xuat noi dung can check
+            input_data = data['inference_input']
+
+            result = predict_with_latest_model(input_data)
+            print(result)
+            results_store[request_id] = {
+                'status': 'Completed',
+                'result': result
+            }
+        except json.JSONDecodeError:
+            print(msg.value()," is not valid JSON")
             continue
 
-        for topic_partition, messages in raw_messages.items():
-            for message in messages:
-                message_value = message.value
-
-                request_id = message_value['id']
-                # Trích xuat noi dung can check
-                input_data = message_value['data']
-
-                # Simulate model processing
-                time.sleep(5)
-                result = predict_with_latest_model(input_data)
-
-                results_store[request_id] = {
-                    'status': 'Completed',
-                    'result': result
-                }
 
 
-def predict_with_latest_model(input_text):
+def predict_with_latest_model(input_json):
     # Load the latest model
     model = load_latest_model()
+    inference_data = convert_to_object_data(input_json)
+    test_df = create_dataframe_from_object_data([inference_data])
+    # Tạo TabularDataset từ test_df
+    test_data = TabularDataset(test_df)
 
-    # Prepare input as a Pandas DataFrame
-    import pandas as pd
-    input_df = pd.DataFrame({"text": [input_text]})
+    test_data_nolab = test_data.drop(columns=["label"], errors="ignore")  # Bỏ cột label để predictor dự đoán
 
-    # Perform prediction
-    prediction = model.predict(input_df)
-    return prediction
+    # Dự đoán
+    y_pred = model.predict(test_data_nolab)
+
+    print(y_pred)
+    return y_pred[0]
 
 
-# Start the Kafka consumer in a separate thread
-consumer_thread = threading.Thread(target=process_inference_requests, daemon=True)
-consumer_thread.start()
+
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Start the Kafka consumer in a separate thread
+    consumer_thread = threading.Thread(target=process_inference_requests, daemon=True)
+    consumer_thread.start()
+    app.run(host='0.0.0.0', port=5001)
 
-# NGINX Configuration Example
-# Save this configuration as /etc/nginx/conf.d/ml_service.conf
-#
-# upstream model_service {
-#     server 127.0.0.1:5000;
-#     server 127.0.0.1:5001;
-#     server 127.0.0.1:5002;
-# }
-#
-# server {
-#     listen 80;
-#
-#     location /api/ {
-#         proxy_pass http://model_service;
-#         proxy_set_header Host $host;
-#         proxy_set_header X-Real-IP $remote_addr;
-#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-#     }
-# }
+
