@@ -5,26 +5,45 @@ import mlflow.pyfunc
 import os
 from dotenv import load_dotenv
 import threading
-import time
-import queue
 import uuid
+from flask_cors import CORS
 import json
 from training import convert_to_object_data, create_dataframe_from_object_data
-
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from cassandra.cluster import Cluster
+import bcrypt
+import pusher
 load_dotenv()
 
 # Initial setup for Flask app and Kafka
 app = Flask(__name__)
+app.config['JWT_SECRET_KEY'] = 'your-secret-key'  # Thay bằng secret key của bạn
+CORS(app)
+# Initialize Pusher
+pusher_client = pusher.Pusher(
 
+    ssl=True,
+    app_id = "1934100",
+    key = "b40cd313ac5885723c8a",
+    secret = "a5cc83ea0db07731c87c",
+    cluster = "ap1",
+)
+jwt = JWTManager(app)
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
 INFERENCE_TOPIC = os.getenv("INFERENCE_TOPIC")
+
+# Create a Kafka consumer, producer
 producer = Producer({'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS})
-# Create a Kafka consumer
 consumer = Consumer({
     'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS,
     'group.id': 'training_group',
     'auto.offset.reset': 'earliest'
 })
+
+# Kết nối Cassandra
+cluster = Cluster(['127.0.0.1'])  # Địa chỉ IP của cụm Cassandra
+session = cluster.connect()
+session.set_keyspace('fake_news_system')  # Tạo keyspace tương ứng
 
 # Luu ket qua cua request suy luan mo hinh
 # 1 request sẽ có 2 trạng thái: Not Ready, hoặc Completed
@@ -36,7 +55,12 @@ def health_check():
     # You can add any health check logic here (e.g., database connectivity check)
     return jsonify(status='healthy'), 200
 @app.route('/api/inference', methods=['POST'])
+@jwt_required()
 def inference():
+    current_user = get_jwt_identity()
+    if current_user['role'] not in ["admin","user"]:
+        return jsonify({"error": "User access only"}), 403
+    current_user_name = current_user['username']
     # Create a unique ID for the inference request
     request_id = str(uuid.uuid4())
 
@@ -46,19 +70,50 @@ def inference():
         'inference_input': request.json  # Assumes input data is provided as JSON
     }
 
-    # Send the message to Kafka
-    producer.produce(INFERENCE_TOPIC, value=json.dumps(message).encode('utf-8'))
-    producer.flush()
 
-    # Store initial state as "Not ready"
+
+    # Store initial state as "Not reafdy"
+
+
+    # Lưu thông tin vào Cassandra
+    query = "INSERT INTO inference_requests (request_id, request_data, status, result,username) VALUES (%s,%s, %s, %s,%s)"
+    session.execute(query, [request_id, json.dumps(request.json), 0, None,current_user_name])
     results_store[request_id] = {
         'status': 'Not Ready',
         'result': None
     }
 
+    # Send the message to Kafka
+    producer.produce(INFERENCE_TOPIC, value=json.dumps(message))
+    producer.flush()
+
     return jsonify({"id": request_id}), 202
 
 
+@app.route ("/api/requests/list",methods=['GET'])
+@jwt_required()
+def list_requests():
+    current_user = get_jwt_identity()
+    if current_user == None:
+        return jsonify({"error": "User access only"}), 403
+    username = current_user['username']
+    query = "SELECT request_data,status,result, request_id FROM inference_requests WHERE username=%s  ALLOW FILTERING"
+    raw_list_requests = session.execute(query, [username]).all()
+    output_list_requests=[]
+    for request in raw_list_requests:
+        request_json_data = json.loads(request[0])
+        statement = request_json_data['statement']
+        speaker = request_json_data['speaker']
+
+        if request[1]==1:
+            status = "Completed"
+        elif request[1]==0:
+            status = "Not Ready"
+        result = request[2]
+        request_id = request[3]
+        output_list_requests.append({"statement": statement, "speaker": speaker, "result": result,"id": request_id})
+
+    return jsonify(output_list_requests),200
 @app.route('/api/result/<request_id>', methods=['GET'])
 def get_result(request_id):
     result = results_store.get(request_id)
@@ -70,6 +125,64 @@ def get_result(request_id):
 
     return jsonify({"status": "Completed", "result": result['result']}), 200
 
+
+@app.route('/signup', methods=['POST'])
+def signup():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    role = data.get('role', 'user')  # Mặc định là người dùng
+
+    # Kiểm tra username tồn tại
+    query = "SELECT * FROM users WHERE username=%s"
+    user = session.execute(query, [username]).one()
+    if user:
+        return jsonify({"error": "Username already exists"}), 400
+
+    # Mã hóa mật khẩu
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+    # Lưu thông tin vào Cassandra
+    query = "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)"
+    session.execute(query, [username, hashed_password.decode('utf-8'), role])
+
+    return jsonify({"message": "User registered successfully"}), 201
+
+@app.route('/signin', methods=['POST'])
+def signin():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+
+    # Tìm người dùng trong Cassandra
+    query = "SELECT * FROM users WHERE username=%s"
+    user = session.execute(query, [username]).one()
+    if not user:
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    # Kiểm tra mật khẩu
+    if not bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    # Tạo JWT
+    access_token = create_access_token(identity={"username": username, "role": user.role})
+    return jsonify({"username":user.username,"access_token": access_token}), 200
+
+
+@app.route('/admin', methods=['GET'])
+@jwt_required()
+def admin_only():
+    current_user = get_jwt_identity()
+    if current_user['role'] != 'admin':
+        return jsonify({"error": "Admin access only"}), 403
+
+    return jsonify({"message": "Welcome, Admin!"}), 200
+
+@app.route('/user', methods=['GET'])
+@jwt_required()
+def user_only():
+    current_user = get_jwt_identity()
+    return jsonify({"message": f"Welcome, {current_user['username']}!"}), 200
 
 
 def load_latest_model():
@@ -107,6 +220,13 @@ def process_inference_requests():
 
             result = predict_with_latest_model(input_data)
             print(result)
+            # Push update to Pusher
+            pusher_client.trigger("fake-news-channel", "new-detection", {
+               "need_refresh":True
+            })
+            query = ("UPDATE inference_requests "
+                     "SET status = %s, result = %s WHERE request_id = %s")
+            session.execute(query, [1, result, request_id])
             results_store[request_id] = {
                 'status': 'Completed',
                 'result': result

@@ -21,8 +21,10 @@ mlflow server \
 
 #Run continuous training service
 
+#Config DB
 
 #Run Flask server
 python3 backend-service.py
 
-{"label": "true", "statement": "The earth revolves around the sun.", "subject": "science", "speaker": "astronomer", "speaker_job_title": "researcher", "state_info": "global", "party_affiliation": "none", "barely_true_counts": "1", "false_counts": "0", "half_true_counts": "2", "mostly_true_counts": "3", "pants_on_fire_counts": "0", "context": "scientific knowledge"}
+
+
