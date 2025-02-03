@@ -5,6 +5,7 @@ autogluon
 pandas
 kagglehub
 confluent_kafka
+sklearn
 flask-cors
 bcrypt
 flask-jwt-extended

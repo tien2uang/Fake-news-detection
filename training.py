@@ -7,16 +7,17 @@ import mlflow
 import pandas as pd
 from autogluon.common import TabularDataset
 from autogluon.tabular import TabularPredictor
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer, KafkaError,Producer
 from dotenv import load_dotenv
 from mlflow.pyfunc import PythonModel
-
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 load_dotenv()
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
 DATA_TOPIC = os.getenv("DATA_TOPIC")
 # Tên cột nhãn
 label_column = "label"
-
+# Create a Kafka consumer, producer
+producer = Producer({'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS})
 # Create a Kafka consumer
 consumer = Consumer({
     'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS,
@@ -29,7 +30,7 @@ MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment("Fake News Detection")
 
-model_save_path = "./AutogluonModels"
+model_save_path = "AutogluonModels"
 # Đường dẫn đến folder chứa dataset trên Kaggle:
 path = kagglehub.dataset_download("doanquanvietnamca/liar-dataset")
 DATA_PATH = path + "/"  # Thay đổi nếu cần
@@ -137,21 +138,35 @@ def consume_training_data():
 def train_and_log_model(training_raw_data: List[ExecuteData]):
     """Train a model using AutoGluon and log it to MLFlow."""
     print("Starting training process...")
-    continuous_train_df = create_dataframe_from_object_data(training_raw_data)
-    original_train_df = pd.read_csv(
-        DATA_PATH + "train.tsv",
-        sep='\t',
-        header=None,
-        names=[
-            "label", "statement", "subject", "speaker", "speaker_job_title",
-            "state_info", "party_affiliation", "barely_true_counts",
-            "false_counts", "half_true_counts", "mostly_true_counts",
-            "pants_on_fire_counts", "context"
-        ]
-    )
+    if training_raw_data is not None:
+        continuous_train_df = create_dataframe_from_object_data(training_raw_data)
+        original_train_df = pd.read_csv(
+            DATA_PATH + "train.tsv",
+            sep='\t',
+            header=None,
+            names=[
+                "label", "statement", "subject", "speaker", "speaker_job_title",
+                "state_info", "party_affiliation", "barely_true_counts",
+                "false_counts", "half_true_counts", "mostly_true_counts",
+                "pants_on_fire_counts", "context"
+            ]
+        )
 
-    train_raw_data = pd.concat([original_train_df, continuous_train_df], axis=0).reset_index(drop=True)
+        train_raw_data = pd.concat([original_train_df, continuous_train_df], axis=0).reset_index(drop=True)
+    else:
+        original_train_df = pd.read_csv(
+            DATA_PATH + "train.tsv",
+            sep='\t',
+            header=None,
+            names=[
+                "label", "statement", "subject", "speaker", "speaker_job_title",
+                "state_info", "party_affiliation", "barely_true_counts",
+                "false_counts", "half_true_counts", "mostly_true_counts",
+                "pants_on_fire_counts", "context"
+            ]
+        )
 
+        train_raw_data = pd.concat([original_train_df], axis=0).reset_index(drop=True)
     # Chuyển DataFrame sang TabularDataset
     train_data = TabularDataset(train_raw_data)
 
@@ -170,6 +185,33 @@ def train_and_log_model(training_raw_data: List[ExecuteData]):
         },
 
     )
+
+    # Load test data
+    test_df = pd.read_csv(
+        DATA_PATH + "test.tsv",
+        sep='\t',
+        header=None,
+        names=[
+            "label", "statement", "subject", "speaker", "speaker_job_title",
+            "state_info", "party_affiliation", "barely_true_counts",
+            "false_counts", "half_true_counts", "mostly_true_counts",
+            "pants_on_fire_counts", "context"
+        ]
+    )
+    test_data = TabularDataset(test_df)
+
+    # Ground truth labels
+    y_true = test_data[label_column]
+
+    # Predict on test set
+    y_pred = predictor.predict(test_data)
+
+    # Calculate evaluation metrics
+    accuracy = accuracy_score(y_true, y_pred)
+    # precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+    # recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+    # f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+
     predictor.save(model_dir)
     print(f"Model saved to {model_dir}")
 
@@ -181,6 +223,10 @@ def train_and_log_model(training_raw_data: List[ExecuteData]):
             python_model=AutoGluonModelWrapper(model_dir),
             artifacts={"model_dir": model_dir},
         )
+        mlflow.log_metric("accuracy", accuracy)
+        # mlflow.log_metric("precision", precision)
+        # mlflow.log_metric("recall", recall)
+        # mlflow.log_metric("f1_score", f1)
         print(f"Model logged to MLFlow with run ID: {run.info.run_id}")
 
         # Register model in the MLFlow Model Registry
@@ -192,4 +238,5 @@ def train_and_log_model(training_raw_data: List[ExecuteData]):
 
 if __name__ == "__main__":
     print("Starting Training Service...")
+    train_and_log_model(None)
     consume_training_data()
