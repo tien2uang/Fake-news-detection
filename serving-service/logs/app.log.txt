@@ -1,0 +1,10 @@
+2025-02-07 22:58:32 - -------------------REQUEST /api/telemetry POST------------------
+2025-02-07 22:58:32 - Payload: {"user": "quangnt22", "telementry_content": "so good"}
+2025-02-07 23:27:20 - -------------------REQUEST /api/telemetry POST------------------
+2025-02-07 23:27:20 - Payload: {"user": "quangnt22", "telementry_content": "so good"}
+2025-02-07 23:27:22 - -------------------REQUEST /api/telemetry POST------------------
+2025-02-07 23:27:22 - Payload: {"user": "quangnt22", "telementry_content": "so good"}
+2025-02-07 23:27:50 - -------------------REQUEST /api/inference POST------------------
+2025-02-07 23:27:50 - Payload: {"user": "quangnt22", "telementry_content": "so good"}
+2025-02-07 23:27:50 - -------------------RESPONSE /api/inference POST ------------------
+2025-02-07 23:27:50 - {"id": "6bc89347-b74a-48ae-9e08-533f26cd87dd"}
