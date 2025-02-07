@@ -1,0 +1,8 @@
+dataclasses
+Flask
+pandas
+Werkzeug
+requests
+prometheus_client
+pyyaml
+evidently
