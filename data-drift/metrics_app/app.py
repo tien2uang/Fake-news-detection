@@ -194,7 +194,9 @@ def iterate():
 
     current_data = pd.read_csv(current_path, skiprows=range(1, current_scanning_number), nrows=n_row)
     if current_data.shape[0] == 0:
-        PROD_SCANNER.clear()
+        REGISTRY.unregister(PROD_SCANNER)
+        REGISTRY.unregister(SERVICE.metric)
+        REGISTRY.unregister(SERVICE.stats)
         return "All Data was scanned. please check it later!"
     SERVICE.iterate(dataset_name="fake_new_detection", new_rows=current_data)
     return "done"
