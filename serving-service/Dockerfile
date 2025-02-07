@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir mlflow==2.0.1
 # Create a working directory
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
 COPY . .
 RUN  mlflow server     --backend-store-uri sqlite:///mlflow.db \
