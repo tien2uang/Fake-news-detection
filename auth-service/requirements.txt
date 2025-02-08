@@ -1,0 +1,7 @@
+python-dotenv
+flask
+confluent_kafka
+flask-cors
+bcrypt
+flask-jwt-extended
+cassandra-driver

@@ -1,0 +1,12 @@
+python-dotenv
+flask
+autogluon
+pandas
+kagglehub
+confluent_kafka
+scikit-learn
+flask-cors
+bcrypt
+mlflow
+flask-jwt-extended
+cassandra-driver
