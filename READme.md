@@ -74,11 +74,6 @@ Chạy từng service với các lệnh sau:
 
 ---
 
-📌 *Hãy đảm bảo tất cả các service, Kafka, Cassandra và NGINX được thiết lập đúng trước khi chạy hệ thống.*
-Dưới đây là một mẫu README theo các ý chính mà bạn yêu cầu. Bạn có thể điều chỉnh lại nội dung theo dự án cụ thể của mình.
-
----
-
 # Deploy lên AKS
 
 ## 1. Giới Thiệu Các Công Cụ
