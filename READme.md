@@ -18,7 +18,7 @@ Hệ thống sử dụng:
 - **NGINX** đóng vai trò **API Gateway**.
 - **Cassandra** làm cơ sở dữ liệu lưu trữ dữ liệu.
 
-![Kiến trúc hệ thống](https://github.com/user-attachments/assets/870761eb-03af-4702-b5f8-b935b137fbd9)
+![Kiến trúc hệ thống](https://github.com/user-attachments/assets/978151ac-367f-4055-b65d-d7971e586f8d)
 
 ---
 
