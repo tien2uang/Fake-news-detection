@@ -8,3 +8,17 @@
 2025-02-07 23:27:50 - Payload: {"user": "quangnt22", "telementry_content": "so good"}
 2025-02-07 23:27:50 - -------------------RESPONSE /api/inference POST ------------------
 2025-02-07 23:27:50 - {"id": "6bc89347-b74a-48ae-9e08-533f26cd87dd"}
+2025-02-08 09:21:18 - -------------------REQUEST /api/inference POST------------------
+2025-02-08 09:21:18 - Payload: {"user": "quangnt22", "telementry_content": "so good"}
+2025-02-08 09:21:18 - -------------------RESPONSE /api/inference POST ------------------
+2025-02-08 09:21:18 - {"id": "4486b6e7-b3a5-4bfd-9b86-30fd72e24e51"}
+2025-02-08 09:23:42 - -------------------REQUEST /api/inference POST------------------
+2025-02-08 09:23:42 - Payload: {"label": "true", "statement": "The economy has grown 5% this year.", "subject": "economy", "speaker": "John Doe", "speaker_job_title": "Economist", "state_info": "California", "party_affiliation": "Independent", "barely_true_counts": 2, "false_counts": 3, "half_true_counts": 5, "mostly_true_counts": 7, "pants_on_fire_counts": 1, "context": "Discussing the annual economic report."}
+2025-02-08 09:23:42 - -------------------RESPONSE /api/inference POST ------------------
+2025-02-08 09:23:42 - {"id": "556ba8b3-0273-4eac-946e-ade172efbb1b"}
+2025-02-08 09:28:48 - -------------------REQUEST /api/inference POST------------------
+2025-02-08 09:28:48 - Payload: {"label": "true", "statement": "The economy has grown 5% this year.", "subject": "economy", "speaker": "John Doe", "speaker_job_title": "Economist", "state_info": "California", "party_affiliation": "Independent", "barely_true_counts": 2, "false_counts": 3, "half_true_counts": 5, "mostly_true_counts": 7, "pants_on_fire_counts": 1, "context": "Discussing the annual economic report."}
+2025-02-08 09:28:48 - -------------------RESPONSE /api/inference POST ------------------
+2025-02-08 09:28:48 - {"id": "74267f72-c632-45ec-87b3-49a915fd2107"}
+2025-02-08 09:29:02 - -------------------REQUEST /api/requests/list GET------------------
+2025-02-08 09:29:02 - Parameter: 74267f72-c632-45ec-87b3-49a915fd2107

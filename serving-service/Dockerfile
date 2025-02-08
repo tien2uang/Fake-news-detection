@@ -17,19 +17,13 @@ RUN pip install --no-cache-dir mlflow==2.0.1
 
 # Create a working directory
 WORKDIR /app
-COPY requirements.txt .
+COPY ../training-service/requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .
-RUN  mlflow server     --backend-store-uri sqlite:///mlflow.db \
-         --default-artifact-root ./mlruns     --host 0.0.0.0     --port 5000
 
 
 
-
-
-# Expose port 5000 for the MLflow server
-EXPOSE 5000 5002
 
 # Ensure the script has execution permissions
 RUN chmod +x entrypoint.sh

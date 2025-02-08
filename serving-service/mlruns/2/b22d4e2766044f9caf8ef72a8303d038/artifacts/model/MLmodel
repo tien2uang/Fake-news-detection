@@ -1,0 +1,21 @@
+artifact_path: model
+flavors:
+  python_function:
+    artifacts:
+      model_dir:
+        path: artifacts/20250208_180835
+        uri: ../serving-service/AutogluonModels/20250208_180835
+    cloudpickle_version: 3.1.1
+    code: null
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pyfunc.model
+    python_model: python_model.pkl
+    python_version: 3.10.12
+    streamable: false
+mlflow_version: 2.19.0
+model_size_bytes: 11283014
+model_uuid: 565e1623531346c897057919486879ea
+run_id: b22d4e2766044f9caf8ef72a8303d038
+utc_time_created: '2025-02-08 11:08:58.527410'
