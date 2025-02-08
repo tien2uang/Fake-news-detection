@@ -1,4 +1,6 @@
 # 📰 Giới thiệu Hệ thống Fake News Detection
+[📹 Xem video demo](https://drive.google.com/file/d/1Kdu0mszLqihcbH2EwefYtN_vplaqvU3t/view)
+
 Hệ thống **Fake News Detection** được phát triển để xác định các phát biểu giả mạo, sử dụng dữ liệu từ **LIAR Dataset**.
 
 Mã nguồn hệ thống được chia thành hai phần:
