@@ -1,0 +1,60 @@
+# 1. Deployment cho serving_service (MLflow + model serving)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serving-service
+  labels:
+    app: serving-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: serving-service
+  template:
+    metadata:
+      labels:
+        app: serving-service
+    spec:
+      containers:
+      - name: serving-service
+        image: quangnt02/serving-service:3.0
+        ports:
+        - containerPort: 5000
+          name: mlflow
+        - containerPort: 5002
+          name: model-serving
+        env:
+        - name: INFERENCE_TOPIC
+          value: "inferrence_data"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka.kafka.svc.cluster.local:9092"   
+        - name: KAFKA_SECURITY_PROTOCOL
+          value: "PLAINTEXT"   # Thay bằng password của bạn
+        - name: DATA_TOPIC
+          value: "training_data"
+        - name: MLFLOW_ARTIFACT_ROOT
+          value: "./mlruns"
+        - name: MLFLOW_TRACKING_URI
+          value: "http://localhost:5000"
+        - name: CASSANDRA_HOST
+          value: "cassandra"              # Nếu Cassandra chạy với service tên "cassandra"
+                # Đảm bảo service Cassandra đã được deploy với tên "cassandra"
+---
+# 2. Service cho serving_service (LoadBalancer để cấp Public IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: serving-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: serving-service
+  ports:
+  - name: mlflow
+    protocol: TCP
+    port: 5000
+    targetPort: 5000
+  - name: model-serving
+    protocol: TCP
+    port: 5002
+    targetPort: 5002
